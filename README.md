@@ -1,61 +1,77 @@
-# BATMAN - Battery Manager CLI Tool
+ziuus: Here’s a detailed summary of this chat:
 
-BATMAN is a lightweight Linux utility to manage battery conservation mode via CLI.
+You shared your recent **GitHub issue discussion** from the `pop-os/gnome-shell-extension-system76-power` repository, where you were talking with a maintainer about **conservation mode** and **battery charge thresholds**.
 
+The maintainer explained that the current implementation only supports **System76 and Huawei devices**, and that while a user attempted to remove the brand check to support Lenovo, it didn’t work correctly. They suggested that you either use **TLP** (which already handles Lenovo quirks) or continue using your **BATMAN CLI tool**, noting they weren’t sure where your `battery-manager` command came from.
 
-# Simple Installation (.deb)
+You then asked what to reply, since you realized that you **hadn’t included the source code** of the `battery-manager` command in your BATMAN repo — it was part of your local script that interacts directly with `/sys/class/power_supply/` to manage Lenovo’s battery conservation mode.
 
+We discussed how to respond appropriately on GitHub to maintain professionalism and transparency. The conclusion was that you should:
 
- 1. Download the ZIP file for .deb
+1. **Acknowledge** the maintainer’s clarification.
+2. **Explain** that `battery-manager` is part of your script for Lenovo’s battery control.
+3. **Admit** that you unintentionally left out its source in the repo.
+4. **Commit** to adding it soon for transparency.
+
+# BATMAN — Battery Manager CLI
+
+BATMAN is a small, focused CLI utility for managing battery conservation mode on laptops (Lenovo/ideapad compatibility). This repository contains lightweight scripts to check battery status and enable/disable the hardware conservation mode that limits charging (≈60%).
+
+This project provides small, auditable scripts that write to the kernel sysfs interface to toggle Lenovo conservation mode. If you prefer broader hardware coverage and automatic heuristics, use TLP or distribution-managed tooling.
+
+Quick links
+
+- Documentation: `docs/BATTERY_MANAGER.md`
+- License: `LICENSE`
+
+Features
+
+- View battery charge and state
+- Enable / disable Lenovo conservation mode (via sysfs)
+- Interactive menu-based manager (optional)
+
+Install (from source)
+
+1. Make scripts executable:
+
 ```bash
-
-wget https://github.com/user-attachments/files/20724075/batman_5.0_all.deb.zip
+chmod +x scripts/*
 ```
 
-
- 2. Unzip the file (creates batman_5.0_all.deb)
-```bash
-
-unzip batman_5.0_all.deb.zip
-```
-
- 3. Install the extracted .deb package
-```bash
-
-sudo dpkg -i batman_5.0_all.deb
-```
-
- 4. Run the program
-```bash
-
-batman
-```
-
-
-
-## Features
-- View battery status
-- Enable/Disable conservation mode
-- Set charge limit
-
-## Installation using source code zip file
-
-Download and unzip the source code
+2. Install to your home directory (recommended):
 
 ```bash
-chmod +x install.sh
 ./install.sh
 ```
 
-## Usage
+3. To install system-wide (requires sudo):
+
 ```bash
-batman
+./install.sh --system
 ```
 
-## Uninstallation
+Usage examples
+
 ```bash
-./uninstall.sh
+# Show battery status
+battery-status
+
+# Enable conservation mode (requires sudo if you installed scripts system-wide)
+sudo battery-conservation-on
+
+# Run interactive manager (if installed)
+battery-manager
 ```
 
-## License
+Notes
+
+- The scripts use a Lenovo ideapad/ACPI sysfs interface by default. You can override the path at runtime via the `CONSERVATION_MODE` environment variable if your device exposes the interface elsewhere.
+- Scripts prefer direct writes to the sysfs file when possible and will fall back to `sudo tee` if necessary.
+
+Contributing
+
+Please read `CONTRIBUTING.md` for guidelines on submitting improvements.
+
+License
+
 MIT

@@ -1,7 +1,7 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Disable battery conservation mode (charges to 100%)
 
-CONSERVATION_MODE="/sys/devices/pci0000:00/0000:00:1f.0/PNP0C09:00/VPC2004:00/conservation_mode"
+CONSERVATION_MODE="${CONSERVATION_MODE:-/sys/devices/pci0000:00/0000:00:1f.0/PNP0C09:00/VPC2004:00/conservation_mode}"
 
 if [ ! -e "$CONSERVATION_MODE" ]; then
     echo "Conservation mode interface not found: $CONSERVATION_MODE"
@@ -9,11 +9,15 @@ if [ ! -e "$CONSERVATION_MODE" ]; then
 fi
 
 echo "Disabling battery conservation mode..."
-echo 0 | sudo tee "$CONSERVATION_MODE" >/dev/null
-if [ $? -eq 0 ]; then
-    echo "✓ Conservation mode DISABLED - Battery will charge to 100%"
-    exit 0
+if [ -w "$CONSERVATION_MODE" ]; then
+    echo 0 > "$CONSERVATION_MODE" 2>/dev/null && echo "✓ Conservation mode DISABLED - Battery will charge to 100%" && exit 0 || (echo "✗ Failed to disable conservation mode" && exit 1)
 else
-    echo "✗ Failed to disable conservation mode"
-    exit 1
+    echo 0 | sudo tee "$CONSERVATION_MODE" >/dev/null
+    if [ $? -eq 0 ]; then
+        echo "✓ Conservation mode DISABLED - Battery will charge to 100%"
+        exit 0
+    else
+        echo "✗ Failed to disable conservation mode"
+        exit 1
+    fi
 fi

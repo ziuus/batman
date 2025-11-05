@@ -1,9 +1,9 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Show battery and conservation mode status
 
-CAPACITY_FILE="/sys/class/power_supply/BAT0/capacity"
-STATUS_FILE="/sys/class/power_supply/BAT0/status"
-CONSERVATION_MODE="/sys/devices/pci0000:00/0000:00:1f.0/PNP0C09:00/VPC2004:00/conservation_mode"
+CAPACITY_FILE="${BATTERY_CAPACITY:-/sys/class/power_supply/BAT0/capacity}"
+STATUS_FILE="${BATTERY_STATUS:-/sys/class/power_supply/BAT0/status}"
+CONSERVATION_MODE="${CONSERVATION_MODE:-/sys/devices/pci0000:00/0000:00:1f.0/PNP0C09:00/VPC2004:00/conservation_mode}"
 
 if [ -e "$CAPACITY_FILE" ]; then
     CAPACITY=$(cat "$CAPACITY_FILE" 2>/dev/null)
@@ -31,3 +31,4 @@ if [ -e "$CONSERVATION_MODE" ]; then
 else
     echo "  Conservation Mode: interface not found"
 fi
+

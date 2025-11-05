@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Lightweight wrapper that delegates to the more featureful interactive manager
 # This file simply forwards common subcommands to the full manager.
 

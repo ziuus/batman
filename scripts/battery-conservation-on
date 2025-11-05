@@ -1,7 +1,7 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Enable battery conservation mode (charges to ~60%)
 
-CONSERVATION_MODE="/sys/devices/pci0000:00/0000:00:1f.0/PNP0C09:00/VPC2004:00/conservation_mode"
+CONSERVATION_MODE="${CONSERVATION_MODE:-/sys/devices/pci0000:00/0000:00:1f.0/PNP0C09:00/VPC2004:00/conservation_mode}"
 
 if [ ! -e "$CONSERVATION_MODE" ]; then
     echo "Conservation mode interface not found: $CONSERVATION_MODE"
@@ -9,11 +9,16 @@ if [ ! -e "$CONSERVATION_MODE" ]; then
 fi
 
 echo "Enabling battery conservation mode..."
-echo 1 | sudo tee "$CONSERVATION_MODE" >/dev/null
-if [ $? -eq 0 ]; then
-    echo "✓ Conservation mode ENABLED - Battery will charge to ~60% max"
-    exit 0
+if [ -w "$CONSERVATION_MODE" ]; then
+    echo 1 > "$CONSERVATION_MODE" 2>/dev/null && echo "✓ Conservation mode ENABLED - Battery will charge to ~60% max" && exit 0 || (echo "✗ Failed to enable conservation mode" && exit 1)
 else
-    echo "✗ Failed to enable conservation mode"
-    exit 1
+    # fall back to sudo tee when direct write is not allowed
+    echo 1 | sudo tee "$CONSERVATION_MODE" >/dev/null
+    if [ $? -eq 0 ]; then
+        echo "✓ Conservation mode ENABLED - Battery will charge to ~60% max"
+        exit 0
+    else
+        echo "✗ Failed to enable conservation mode"
+        exit 1
+    fi
 fi

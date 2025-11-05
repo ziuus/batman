@@ -1,7 +1,12 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # Battery Management and Conservation Mode Manager (full interactive script)
 # Copied from local implementation to improve transparency in the repo.
+
+# Allow overriding paths via environment for portability/testing
+CONSERVATION_MODE="${CONSERVATION_MODE:-/sys/devices/pci0000:00/0000:00:1f.0/PNP0C09:00/VPC2004:00/conservation_mode}"
+BATTERY_CAPACITY="${BATTERY_CAPACITY:-/sys/class/power_supply/BAT0/capacity}"
+BATTERY_STATUS="${BATTERY_STATUS:-/sys/class/power_supply/BAT0/status}"
 
 # Color codes for output
 RED='\033[0;31m'
@@ -9,11 +14,6 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
-
-# Battery and conservation mode paths
-BATTERY_CAPACITY="/sys/class/power_supply/BAT0/capacity"
-BATTERY_STATUS="/sys/class/power_supply/BAT0/status"
-CONSERVATION_MODE="/sys/devices/pci0000:00/0000:00:1f.0/PNP0C09:00/VPC2004:00/conservation_mode"
 
 # Function to print colored output
 print_status() {
