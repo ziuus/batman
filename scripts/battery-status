@@ -1,0 +1,33 @@
+#!/bin/bash
+# Show battery and conservation mode status
+
+CAPACITY_FILE="/sys/class/power_supply/BAT0/capacity"
+STATUS_FILE="/sys/class/power_supply/BAT0/status"
+CONSERVATION_MODE="/sys/devices/pci0000:00/0000:00:1f.0/PNP0C09:00/VPC2004:00/conservation_mode"
+
+if [ -e "$CAPACITY_FILE" ]; then
+    CAPACITY=$(cat "$CAPACITY_FILE" 2>/dev/null)
+else
+    CAPACITY="N/A"
+fi
+
+if [ -e "$STATUS_FILE" ]; then
+    STATUS=$(cat "$STATUS_FILE" 2>/dev/null)
+else
+    STATUS="N/A"
+fi
+
+echo "Battery Status:"
+echo "  Charge: ${CAPACITY}%"
+echo "  State:  ${STATUS}"
+
+if [ -e "$CONSERVATION_MODE" ]; then
+    CONSERVATION=$(cat "$CONSERVATION_MODE" 2>/dev/null)
+    if [ "$CONSERVATION" = "1" ]; then
+        echo "  Conservation Mode: ENABLED (≈60%)"
+    else
+        echo "  Conservation Mode: DISABLED (100%)"
+    fi
+else
+    echo "  Conservation Mode: interface not found"
+fi
