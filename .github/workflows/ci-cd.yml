@@ -133,12 +133,13 @@ jobs:
           else
             TAG=$RAW_TAG
           fi
-          # produce a Debian-friendly version: strip leading 'v' and validate
-          VER=$(echo "$TAG" | sed -E 's/^v//')
-          case "$VER" in
-            [0-9]*) ;;
-            *) VER="0.0.0-${VER}" ;;
-          esac
+          # produce a Debian-friendly version: strip any leading non-digit chars
+          # e.g. v1.0.3 -> 1.0.3 ; remove prefixes like 'release-' as well
+          VER=$(echo "$TAG" | sed -E 's/^[^0-9]*//')
+          if [ -z "$VER" ]; then
+            VER="0.0.0-dev"
+          fi
+          echo "Computed Debian version: $VER"
           OUT=$PWD/out
           BUILD=$PWD/build/${PKG}_${VER}
           mkdir -p "$BUILD"/usr/local/bin
