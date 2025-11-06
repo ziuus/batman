@@ -4,7 +4,7 @@ set -euo pipefail
 echo "🔍 Running BATMAN doctor checks..."
 
 # Prefer checking for installed commands in PATH
-if command -v battery-manager >/dev/null 2>&1 || command -v battery-status >/dev/null 2>&1; then
+if command -v batman >/dev/null 2>&1 || command -v battery-manager >/dev/null 2>&1 || command -v battery-status >/dev/null 2>&1; then
     echo "✅ BATMAN CLI tools found in PATH"
     exit 0
 fi

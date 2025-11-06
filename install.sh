@@ -29,20 +29,17 @@ fi
 
 echo "📦 Installing BATMAN..."
 
-# Create the user-local data dir
+# Create the user-local data dir and copy the single batman file
 mkdir -p "$HOME/.local/share/battery-tools"
-cp -v scripts/* "$HOME/.local/share/battery-tools/"
+cp -v batman "$HOME/.local/share/battery-tools/" || true
 
-# Ensure user bin exists and create a symlink
+# Ensure user bin exists and create a symlink to the single command
 mkdir -p "$HOME/bin"
-ln -sf "$HOME/.local/share/battery-tools/battery-manager.sh" "$HOME/bin/battery-manager" || true
+ln -sf "$HOME/.local/share/battery-tools/batman" "$HOME/bin/batman" || true
 
 if [ "$SYSTEM_INSTALL" = true ]; then
 	echo "Installing to system: /usr/local/bin (requires sudo)"
-	sudo cp -v "$HOME/.local/share/battery-tools/battery-manager.sh" /usr/local/bin/battery-manager || true
-	sudo cp -v "$HOME/.local/share/battery-tools/battery-conservation-on" /usr/local/bin/ || true
-	sudo cp -v "$HOME/.local/share/battery-tools/battery-conservation-off" /usr/local/bin/ || true
-	sudo cp -v "$HOME/.local/share/battery-tools/battery-status" /usr/local/bin/ || true
+	sudo cp -v "$HOME/.local/share/battery-tools/batman" /usr/local/bin/batman || true
 fi
 
-echo "✅ Installed. Add $HOME/bin to your PATH if it's not already present. Run: battery-manager or battery-status"
+echo "✅ Installed. Add $HOME/bin to your PATH if it's not already present. Run: batman"
