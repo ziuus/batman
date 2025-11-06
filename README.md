@@ -1,90 +1,135 @@
-ziuus: Here’s a detailed summary of this chat:
-
-You shared your recent **GitHub issue discussion** from the `pop-os/gnome-shell-extension-system76-power` repository, where you were talking with a maintainer about **conservation mode** and **battery charge thresholds**.
-
-The maintainer explained that the current implementation only supports **System76 and Huawei devices**, and that while a user attempted to remove the brand check to support Lenovo, it didn’t work correctly. They suggested that you either use **TLP** (which already handles Lenovo quirks) or continue using your **BATMAN CLI tool**, noting they weren’t sure where your `battery-manager` command came from.
-
-You then asked what to reply, since you realized that you **hadn’t included the source code** of the `battery-manager` command in your BATMAN repo — it was part of your local script that interacts directly with `/sys/class/power_supply/` to manage Lenovo’s battery conservation mode.
-
-We discussed how to respond appropriately on GitHub to maintain professionalism and transparency. The conclusion was that you should:
-
-1. **Acknowledge** the maintainer’s clarification.
-2. **Explain** that `battery-manager` is part of your script for Lenovo’s battery control.
-3. **Admit** that you unintentionally left out its source in the repo.
-4. **Commit** to adding it soon for transparency.
-
 # BATMAN — Battery Manager CLI
 
-BATMAN is a small, focused CLI utility for managing battery conservation mode on laptops (Lenovo/ideapad compatibility). This repository contains lightweight scripts to check battery status and enable/disable the hardware conservation mode that limits charging (≈60%).
+BATMAN is a minimal, auditable command-line utility to read battery state and toggle Lenovo-style "conservation" charging mode via the kernel sysfs interface. The tool is intentionally small, portable, and scriptable so it can be reviewed and packaged easily.
 
-This project provides small, auditable scripts that write to the kernel sysfs interface to toggle Lenovo conservation mode. If you prefer broader hardware coverage and automatic heuristics, use TLP or distribution-managed tooling.
+## Motivation
+Modern laptops may provide a "conservation" mode that limits charging to prolong battery lifespan. BATMAN provides a tiny, transparent interface to:
+- Query battery capacity and charging status
+- Enable/Disable/Toggle conservation mode
+- Be safely included in scripts, packages, and automated workflows
 
-Quick links
+## Features
+- Single-file CLI (`batman`) with no runtime dependencies beyond bash
+- Commands: status, enable/on, disable/off, toggle, interactive, help
+- Environment-variable overrides for sysfs paths (for testing or alternate hardware)
+- CI builds release artifacts (.tar.gz and .deb) and publishes checksums
 
-- Documentation: `docs/BATTERY_MANAGER.md`
-- License: `LICENSE`
+## Supported hardware
+BATMAN acts on kernel-exposed sysfs files. It's tested on systems that expose:
+- a battery under `/sys/class/power_supply/BAT0/` (capacity, status)
+- a vendor conservation control sysfs node (path configurable)
 
-Features
+If your hardware exposes equivalent sysfs nodes, BATMAN can be used by overriding the default paths via environment variables.
 
-- View battery charge and state
-- Enable / disable Lenovo conservation mode (via sysfs)
-- Interactive menu-based manager (optional)
+## Quick usage
 
-Install
-
-Quick, safe options to install `batman` for users:
-
-- From a release tarball (recommended): download the release, verify checksum, extract and copy the `batman` binary to `/usr/local/bin`.
-- From this repository (developer): run the bundled `install.sh` (it supports `--prefix` and is idempotent).
-
-Examples:
-
-Install from a downloaded tarball (manual, recommended):
-
+Show status:
 ```bash
-# download the release tarball (replace owner/repo and tag)
-curl -L -o batman.tar.gz "https://github.com/<owner>/batman/releases/download/v1.0.0/batman-1.0.0.tar.gz"
+batman status
+```
+
+Enable conservation mode (may require sudo):
+```bash
+sudo batman enable
+# or
+sudo batman on
+```
+
+Disable conservation mode:
+```bash
+sudo batman disable
+# or
+sudo batman off
+```
+
+Toggle mode:
+```bash
+batman toggle
+```
+
+Interactive menu:
+```bash
+batman interactive
+```
+
+Help:
+```bash
+batman help
+```
+
+## Installation
+
+Option A — Install from release tarball (recommended)
+```bash
+# download the release tarball, verify checksum, extract, then install
+curl -L -o batman.tar.gz "https://github.com/<owner>/batman/releases/download/vX.Y.Z/batman-vX.Y.Z.tar.gz"
+sha256sum batman.tar.gz      # verify with checksums published in Release
 tar -xzf batman.tar.gz
 sudo install -m 0755 batman /usr/local/bin/batman
 ```
 
-Install the packaged `.deb` (Debian/Ubuntu):
-
+Option B — Use included installer (developer)
 ```bash
-# download the .deb from Releases and install
-sudo dpkg -i batman_1.0.0_all.deb
+# idempotent, supports --prefix and --no-sudo
+./install.sh --prefix="$HOME/.local"
 ```
 
-Install from source using the included installer (installs to /usr/local by default):
-
+Option C — Build and create a .deb (CI produces this automatically on releases)
 ```bash
-sudo ./install.sh            # installs to /usr/local/bin
-# or choose a prefix for local installs
-./install.sh --prefix=$HOME/.local
-```
-
-Usage examples
-
-```bash
-# Show battery status
-battery-status
-
-# Enable conservation mode (requires sudo if you installed scripts system-wide)
-sudo battery-conservation-on
-
-# Run interactive manager (if installed)
-battery-manager
+# build a .deb locally (example)
+# see docs/packaging or CI workflow for the exact steps used in releases
 ```
 
 Notes
+- Prefer verifying SHA256 checksums before installing binary artifacts.
+- The repo includes an `install.sh` convenience script for local installs.
 
-- The scripts use a Lenovo ideapad/ACPI sysfs interface by default. You can override the path at runtime via the `CONSERVATION_MODE` environment variable if your device exposes the interface elsewhere.
-- Scripts prefer direct writes to the sysfs file when possible and will fall back to `sudo tee` if necessary.
+## Environment overrides (useful for testing)
+To run BATMAN against alternative or mocked sysfs paths, set one or more environment variables:
+- CONSERVATION_MODE — path to the conservation_mode node
+- BATTERY_CAPACITY — path to battery capacity (default `/sys/class/power_supply/BAT0/capacity`)
+- BATTERY_STATUS — path to battery status (default `/sys/class/power_supply/BAT0/status`)
 
-Contributing
+Example:
+```bash
+CONSERVATION_MODE=/tmp/mock/conservation_mode \
+BATTERY_CAPACITY=/tmp/mock/capacity \
+BATTERY_STATUS=/tmp/mock/status \
+./batman status
+```
 
-Please read `CONTRIBUTING.md` for guidelines on submitting improvements.
+## How it works (brief)
+- Reads battery capacity and status from the configured `BATTERY_CAPACITY` and `BATTERY_STATUS` sysfs files.
+- Reads/writes the `CONSERVATION_MODE` sysfs file to enable/disable conservation (writes `1` to enable, `0` to disable).
+- If direct write is not permitted, the script falls back to using `sudo tee` when appropriate (user will be prompted for password).
 
-License
+## Development & testing
+- Script language: bash (shebang: `#!/usr/bin/env bash`)
+- Linting: run `shellcheck batman`
+- Smoke tests in CI use mocked sysfs files so CI runs on runners without real battery hardware
+- To run the included smoke test locally, run the test script in `tests/` (if present) or set env overrides and run `./batman status`
 
-MIT
+## CI / Packaging (what the repo provides)
+- GitHub Actions run shellcheck, a mocked smoke test, and package artifacts:
+  - `batman-<tag>.tar.gz`
+  - `batman-<tag>_<ver>.deb`
+  - `checksums.sha256`
+- Releases attach artifacts automatically on tag push (see workflow file).
+
+## Troubleshooting
+- "Path not found" errors: ensure your battery and vendor sysfs paths exist or use environment variable overrides.
+- Permission denied on writes: use `sudo batman enable` or adjust udev rules if you want non-root access.
+- Unexpected output: run `batman help` and verify the default sysfs variables used.
+
+## Security & safety notes
+- BATMAN writes to kernel sysfs and can affect charging behavior. Use with care.
+- Do not run arbitrary install scripts from the internet without verifying release checksums.
+- Consider reviewing the `batman` script before installation — it is intentionally small to simplify auditing.
+
+## Contributing
+- Follow the guidelines in `CONTRIBUTING.md`.
+- Keep changes small and test with the included smoke tests.
+- Use `shellcheck` and preserve the simple, auditable design.
+
+## License
+- MIT — see `LICENSE` for the full text.
