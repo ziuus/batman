@@ -30,24 +30,37 @@ Features
 - Enable / disable Lenovo conservation mode (via sysfs)
 - Interactive menu-based manager (optional)
 
-Install (from source)
+Install
 
-1. Make scripts executable:
+Quick, safe options to install `batman` for users:
+
+- From a release tarball (recommended): download the release, verify checksum, extract and copy the `batman` binary to `/usr/local/bin`.
+- From this repository (developer): run the bundled `install.sh` (it supports `--prefix` and is idempotent).
+
+Examples:
+
+Install from a downloaded tarball (manual, recommended):
 
 ```bash
-chmod +x scripts/*
+# download the release tarball (replace owner/repo and tag)
+curl -L -o batman.tar.gz "https://github.com/<owner>/batman/releases/download/v1.0.0/batman-1.0.0.tar.gz"
+tar -xzf batman.tar.gz
+sudo install -m 0755 batman /usr/local/bin/batman
 ```
 
-2. Install to your home directory (recommended):
+Install the packaged `.deb` (Debian/Ubuntu):
 
 ```bash
-./install.sh
+# download the .deb from Releases and install
+sudo dpkg -i batman_1.0.0_all.deb
 ```
 
-3. To install system-wide (requires sudo):
+Install from source using the included installer (installs to /usr/local by default):
 
 ```bash
-./install.sh --system
+sudo ./install.sh            # installs to /usr/local/bin
+# or choose a prefix for local installs
+./install.sh --prefix=$HOME/.local
 ```
 
 Usage examples
