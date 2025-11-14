@@ -57,7 +57,14 @@ jobs:
           TAG=${GITHUB_REF#refs/tags/}
           if [ "$TAG" = "$GITHUB_REF" ]; then TAG=dev; fi
           NAME="batman-${TAG}.tar.gz"
-          tar -czf "$NAME" batman README.md LICENSE VERSION
+          # Build a list of files that actually exist to avoid tar errors when files were removed
+          files="batman"
+          [ -f README.md ] && files="$files README.md"
+          [ -f install.sh ] && files="$files install.sh"
+          [ -f LICENSE ] && files="$files LICENSE"
+          [ -f VERSION ] && files="$files VERSION"
+          echo "Creating tarball with: $files"
+          tar -czf "$NAME" $files
           echo "name=$NAME" >> $GITHUB_OUTPUT
       - name: Upload artifact
         uses: actions/upload-artifact@v4
