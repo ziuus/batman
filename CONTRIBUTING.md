@@ -1,22 +1,47 @@
-## Contributing
+# Contributing to ziuus Projects
 
-Thanks for helping improve Batman.
+Thank you for your interest in contributing! We welcome contributions from the community.
 
-### Before opening a pull request
+## Code of Conduct
+This project adheres to a code of conduct. Please be respectful and inclusive.
 
-- Open an issue describing the bug or feature.
-- Keep pull requests focused on one change.
-- Test your change on at least one supported laptop model.
+## Getting Started
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
 
-### Local setup
-
+## Development Setup
 ```bash
-pip install -r requirements.txt 2>/dev/null || true
-sudo ./install.sh
+# Clone your fork
+git clone https://github.com/yourusername/project.git
+cd project
+
+# Install dependencies
+npm install
+
+# Run development server
+npm run dev
+
+# Run tests
+npm test
 ```
 
-### Pull request checklist
+## Project-Specific Guidelines
+- See project README for specific requirements
+- Follow existing code style and conventions
+- Write tests for new features
+- Update documentation as needed
 
-- Explain what changed and why.
-- Link the related issue.
-- Note any hardware-specific behavior.
+## Pull Request Guidelines
+- Ensure tests pass
+- Update documentation
+- Add comments for complex code
+- Reference related issues
+
+## Questions?
+Open an issue or contact the maintainers.
+
+## License
+By contributing, you agree that your contributions will be licensed under the MIT License.
