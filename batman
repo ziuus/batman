@@ -1,6 +1,17 @@
 #!/usr/bin/env bash
 # BATMAN - single-file battery manager
-# Combines status, conservation enable/disable, toggle, and an interactive menu.
+#
+#   status            battery + conservation + 80% limiter state
+#   enable | on       60% conservation mode ON      (firmware charge cap ~60%)
+#   disable | off     60% conservation mode OFF     (charges to 100%)
+#   toggle | 80       80% limiter: background daemon holds charge in 75-80% band
+#                     by flipping conservation mode at the band edges.
+#   daemon            (internal) the 80% limiter loop; invoked by 'toggle'
+#   interactive | i   menu
+#
+# The 80% limiter does NOT survive reboot - rerun 'batman toggle' after reboot.
+# On stop it restores the conservation state that was set before it started.
+# While it runs, manual enable/disable will be overridden - stop it first.
 
 set -euo pipefail
 
@@ -8,6 +19,16 @@ set -euo pipefail
 CONSERVATION_MODE="${CONSERVATION_MODE:-/sys/devices/pci0000:00/0000:00:1f.0/PNP0C09:00/VPC2004:00/conservation_mode}"
 BATTERY_CAPACITY="${BATTERY_CAPACITY:-/sys/class/power_supply/BAT0/capacity}"
 BATTERY_STATUS="${BATTERY_STATUS:-/sys/class/power_supply/BAT0/status}"
+
+# 80% limiter tunables (also overridable for testing)
+LIMIT80_PIDFILE="${LIMIT80_PIDFILE:-/tmp/batman-80.pid}"
+LIMIT80_STATE="${LIMIT80_STATE:-/tmp/batman-80.state}"
+LIMIT80_LOG="${LIMIT80_LOG:-/tmp/batman-80.log}"
+LIMIT80_HI="${LIMIT80_HI:-80}"          # stop charging at/above this %
+LIMIT80_LO="${LIMIT80_LO:-75}"          # resume charging at/below this %
+LIMIT80_INTERVAL="${LIMIT80_INTERVAL:-20}"  # seconds between checks
+
+SELF="$(readlink -f "$0")"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -17,9 +38,7 @@ NC='\033[0m'
 
 print() { echo -e "$1$2${NC}"; }
 
-check_file() {
-    [ -e "$1" ] || return 1
-}
+check_file() { [ -e "$1" ]; }
 
 show_battery_info() {
     print "$BLUE" "=== BATTERY INFORMATION ==="
@@ -29,7 +48,6 @@ show_battery_info() {
     else
         print "$YELLOW" "Battery capacity: interface not found"
     fi
-
     if check_file "$BATTERY_STATUS"; then
         status=$(cat "$BATTERY_STATUS" 2>/dev/null || echo "N/A")
         print "$BLUE" "Battery Status: ${status}"
@@ -37,7 +55,7 @@ show_battery_info() {
 }
 
 show_conservation_status() {
-    print "$BLUE" "=== CONSERVATION MODE ==="
+    print "$BLUE" "=== CONSERVATION MODE (60%) ==="
     if check_file "$CONSERVATION_MODE"; then
         mode=$(cat "$CONSERVATION_MODE" 2>/dev/null || echo "?")
         if [ "$mode" = "1" ]; then
@@ -58,7 +76,6 @@ write_conservation() {
         print "$RED" "Conservation interface not found: $CONSERVATION_MODE"
         return 2
     fi
-
     if [ -w "$CONSERVATION_MODE" ]; then
         echo "$val" > "$CONSERVATION_MODE" 2>/dev/null && return 0 || return 1
     else
@@ -68,8 +85,11 @@ write_conservation() {
 }
 
 enable_conservation() {
+    if daemon_running 2>/dev/null; then
+        print "$YELLOW" "Note: 80% limiter daemon is active and will override this."
+    fi
     if write_conservation 1; then
-        print "$GREEN" "Conservation mode ENABLED"
+        print "$GREEN" "Conservation mode ENABLED (≈60%)"
     else
         print "$RED" "Failed to enable conservation mode"
         return 1
@@ -77,25 +97,170 @@ enable_conservation() {
 }
 
 disable_conservation() {
+    if daemon_running 2>/dev/null; then
+        print "$YELLOW" "Note: 80% limiter daemon is active and will override this."
+    fi
     if write_conservation 0; then
-        print "$GREEN" "Conservation mode DISABLED"
+        print "$GREEN" "Conservation mode DISABLED (100%)"
     else
         print "$RED" "Failed to disable conservation mode"
         return 1
     fi
 }
 
-toggle_conservation() {
-    if [ ! -e "$CONSERVATION_MODE" ]; then
-        print "$RED" "Conservation interface not found"
-        return 2
+# ---------- 80% limiter daemon helpers ----------
+
+daemon_running() {
+    [ -f "$LIMIT80_PIDFILE" ] || return 1
+    local pid
+    pid=$(cat "$LIMIT80_PIDFILE" 2>/dev/null) || return 1
+    [ -n "$pid" ] || return 1
+    [ -d "/proc/$pid" ] || return 1
+    local cmd
+    cmd=$(tr '\0' ' ' < "/proc/$pid/cmdline" 2>/dev/null || true)
+    [[ "$cmd" == *batman*daemon* ]] || return 1
+    return 0
+}
+
+limit80_start() {
+    if daemon_running; then
+        print "$YELLOW" "80% limiter already active (pid $(cat "$LIMIT80_PIDFILE"))"
+        return 0
     fi
-    cur=$(cat "$CONSERVATION_MODE" 2>/dev/null || echo "0")
-    if [ "$cur" = "1" ]; then
-        disable_conservation
+    rm -f "$LIMIT80_PIDFILE" "$LIMIT80_STATE"
+    : > "$LIMIT80_LOG" 2>/dev/null || true
+    print "$BLUE" "Starting 80% limiter (band ${LIMIT80_LO}-${LIMIT80_HI}%)..."
+    if [ "$(id -u)" -eq 0 ]; then
+        nohup "$SELF" daemon >/dev/null 2>&1 &
     else
-        enable_conservation
+        sudo -b env CONSERVATION_MODE="$CONSERVATION_MODE" \
+             BATTERY_CAPACITY="$BATTERY_CAPACITY" \
+             BATTERY_STATUS="$BATTERY_STATUS" \
+             LIMIT80_PIDFILE="$LIMIT80_PIDFILE" \
+             LIMIT80_STATE="$LIMIT80_STATE" \
+             LIMIT80_LOG="$LIMIT80_LOG" \
+             LIMIT80_HI="$LIMIT80_HI" \
+             LIMIT80_LO="$LIMIT80_LO" \
+             LIMIT80_INTERVAL="$LIMIT80_INTERVAL" \
+             "$SELF" daemon
     fi
+    local i
+    for i in $(seq 1 20); do
+        daemon_running && break
+        sleep 0.5
+    done
+    if daemon_running; then
+        print "$GREEN" "80% limiter ACTIVE (pid $(cat "$LIMIT80_PIDFILE"))"
+        print "$BLUE" "Log: $LIMIT80_LOG"
+    else
+        print "$RED" "Failed to start 80% limiter (sudo password / EC access?). Check $LIMIT80_LOG"
+        return 1
+    fi
+}
+
+limit80_stop() {
+    if ! daemon_running; then
+        rm -f "$LIMIT80_PIDFILE" "$LIMIT80_STATE"
+        print "$YELLOW" "80% limiter is not active"
+        return 0
+    fi
+    local pid
+    pid=$(cat "$LIMIT80_PIDFILE")
+    print "$BLUE" "Stopping 80% limiter (pid $pid)..."
+    if [ "$(id -u)" -eq 0 ]; then
+        kill "$pid" 2>/dev/null || true
+    else
+        sudo kill "$pid" 2>/dev/null || true
+    fi
+    local i
+    for i in $(seq 1 20); do
+        daemon_running || break
+        sleep 0.5
+    done
+    if daemon_running; then
+        if [ "$(id -u)" -eq 0 ]; then
+            kill -9 "$pid" 2>/dev/null || true
+        else
+            sudo kill -9 "$pid" 2>/dev/null || true
+        fi
+        sleep 0.5
+    fi
+    if [ -f "$LIMIT80_STATE" ]; then
+        local pre
+        pre=$(cat "$LIMIT80_STATE" 2>/dev/null || echo 0)
+        print "$BLUE" "Restoring conservation mode to pre-limiter state ($pre)..."
+        write_conservation "$pre" >/dev/null 2>&1 || print "$RED" "Could not restore conservation mode (run with sudo?)"
+    fi
+    rm -f "$LIMIT80_PIDFILE" "$LIMIT80_STATE"
+    print "$GREEN" "80% limiter stopped"
+}
+
+limit80_status() {
+    if daemon_running; then
+        local pid
+        pid=$(cat "$LIMIT80_PIDFILE")
+        print "$GREEN" "80% limiter: ACTIVE (pid $pid, band ${LIMIT80_LO}-${LIMIT80_HI}%)"
+        if [ -f "$LIMIT80_LOG" ]; then
+            print "$BLUE" "last events:"
+            tail -n 3 "$LIMIT80_LOG" | sed 's/^/  /'
+        fi
+    else
+        print "$YELLOW" "80% limiter: INACTIVE"
+    fi
+}
+
+run_daemon() {
+    # Foreground daemon; expected to run as root (or against writable fake files).
+    : >> "$LIMIT80_LOG"
+    exec >> "$LIMIT80_LOG" 2>&1
+    echo "[$(date '+%F %T')] 80% limiter daemon started (pid $$, band ${LIMIT80_LO}-${LIMIT80_HI}, interval ${LIMIT80_INTERVAL}s)"
+    if [ "$(id -u)" -ne 0 ] && [ ! -w "$CONSERVATION_MODE" ]; then
+        echo "[$(date '+%F %T')] daemon needs root: conservation file not writable"
+        echo "$$" > "$LIMIT80_PIDFILE" 2>/dev/null || true
+        exit 1
+    fi
+    echo "$$" > "$LIMIT80_PIDFILE"
+    local pre
+    pre=$(cat "$CONSERVATION_MODE" 2>/dev/null || echo 0)
+    echo "$pre" > "$LIMIT80_STATE"
+    echo "[$(date '+%F %T')] pre-limiter conservation mode: $pre"
+
+    local read_fail=0
+    cleanup_daemon() {
+        echo "[$(date '+%F %T')] daemon stopping, restoring conservation mode to $pre"
+        echo "$pre" > "$CONSERVATION_MODE" 2>/dev/null || true
+        rm -f "$LIMIT80_PIDFILE" "$LIMIT80_STATE"
+        exit 0
+    }
+    trap cleanup_daemon TERM INT HUP
+
+    while true; do
+        local cap mode
+        cap=$(cat "$BATTERY_CAPACITY" 2>/dev/null || echo "")
+        mode=$(cat "$CONSERVATION_MODE" 2>/dev/null || echo "")
+        if [ -n "$cap" ] && [ -n "$mode" ] && [[ "$cap" =~ ^[0-9]+$ ]]; then
+            read_fail=0
+            if [ "$cap" -ge "$LIMIT80_HI" ] && [ "$mode" = "0" ]; then
+                if echo 1 > "$CONSERVATION_MODE" 2>/dev/null; then
+                    echo "[$(date '+%F %T')] cap=${cap}% -> conservation ON (hold)"
+                else
+                    echo "[$(date '+%F %T')] cap=${cap}% -> FAILED to enable conservation"
+                fi
+            elif [ "$cap" -le "$LIMIT80_LO" ] && [ "$mode" = "1" ]; then
+                if echo 0 > "$CONSERVATION_MODE" 2>/dev/null; then
+                    echo "[$(date '+%F %T')] cap=${cap}% -> conservation OFF (charge)"
+                else
+                    echo "[$(date '+%F %T')] cap=${cap}% -> FAILED to disable conservation"
+                fi
+            fi
+        else
+            read_fail=$((read_fail + 1))
+            if [ $((read_fail % 30)) -eq 0 ]; then
+                echo "[$(date '+%F %T')] could not read cap/mode (cap='$cap' mode='$mode') x$read_fail"
+            fi
+        fi
+        sleep "$LIMIT80_INTERVAL" & wait $! 2>/dev/null || true
+    done
 }
 
 show_help() {
@@ -105,15 +270,23 @@ BATMAN - Battery Manager
 Usage: $0 [command]
 
 Commands:
-  status        Show battery and conservation status
-  enable|on     Enable conservation mode (may require sudo)
-  disable|off   Disable conservation mode (may require sudo)
-  toggle        Toggle conservation mode
-  interactive   Run the interactive menu
+  status        Show battery, conservation (60%) and 80% limiter status
+  enable|on     Enable conservation mode (≈60% cap) - may require sudo
+  disable|off   Disable conservation mode (charges to 100%) - may require sudo
+  toggle|80     Toggle the 80% limiter (background daemon, 75-80% band)
+  interactive|i Interactive menu
   help          Show this help
 
-You can override sysfs paths with environment variables, e.g.:
-  CONSERVATION_MODE=/tmp/fake_mode $0 status
+Notes:
+  - The 80% limiter holds charge in a 75-80% band by flipping the 60%
+    conservation bit at the band edges. It is a software hack, not a native
+    80% threshold; firmware may discharge toward 60% when conservation is
+    enabled above 60% - watch $LIMIT80_LOG on the first run.
+  - It does not survive reboot. On stop it restores the conservation state
+    that was set before it started.
+
+Override sysfs / limiter paths via environment variables, e.g.:
+  CONSERVATION_MODE=/tmp/fake_mode BATTERY_CAPACITY=/tmp/fake_cap $0 status
 EOF
 }
 
@@ -123,17 +296,19 @@ interactive_menu() {
         echo "BATMAN - interactive menu"
         echo "1) Show battery status"
         echo "2) Show conservation status"
-        echo "3) Enable conservation mode"
-        echo "4) Disable conservation mode"
-        echo "5) Toggle conservation mode"
+        echo "3) Enable conservation mode (≈60%)"
+        echo "4) Disable conservation mode (100%)"
+        echo "5) Toggle 80% limiter (75-80% band)"
+        echo "6) 80% limiter status"
         echo "0) Exit"
-        read -p "Choose an option [0-5]: " opt
+        read -p "Choose an option [0-6]: " opt
         case "$opt" in
             1) show_battery_info ;;
             2) show_conservation_status ;;
             3) enable_conservation ;;
             4) disable_conservation ;;
             5) toggle_conservation ;;
+            6) limit80_status ;;
             0) exit 0 ;;
             *) echo "Invalid option" ;;
         esac
@@ -144,6 +319,7 @@ case "${1:-status}" in
     status|-s)
         show_battery_info
         show_conservation_status
+        limit80_status
         ;;
     enable|on)
         enable_conservation
@@ -151,8 +327,11 @@ case "${1:-status}" in
     disable|off)
         disable_conservation
         ;;
-    toggle)
-        toggle_conservation
+    toggle|80|limit80)
+        if daemon_running; then limit80_stop; else limit80_start; fi
+        ;;
+    daemon)
+        run_daemon
         ;;
     interactive|i)
         interactive_menu
