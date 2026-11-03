@@ -128,7 +128,8 @@ limit80_start() {
         return 0
     fi
     rm -f "$LIMIT80_PIDFILE" "$LIMIT80_STATE"
-    : > "$LIMIT80_LOG" 2>/dev/null || true
+    # Let the (root) daemon create/own the log file.
+    rm -f "$LIMIT80_LOG" 2>/dev/null || true
     print "$BLUE" "Starting 80% limiter (band ${LIMIT80_LO}-${LIMIT80_HI}%)..."
     if [ "$(id -u)" -eq 0 ]; then
         nohup "$SELF" daemon >/dev/null 2>&1 &
@@ -211,7 +212,10 @@ limit80_status() {
 
 run_daemon() {
     # Foreground daemon; expected to run as root (or against writable fake files).
-    : >> "$LIMIT80_LOG"
+    # Open the log as the daemon (root); fall back to /dev/null if not writable.
+    if ! : >> "$LIMIT80_LOG" 2>/dev/null; then
+        LIMIT80_LOG=/dev/null
+    fi
     exec >> "$LIMIT80_LOG" 2>&1
     echo "[$(date '+%F %T')] 80% limiter daemon started (pid $$, band ${LIMIT80_LO}-${LIMIT80_HI}, interval ${LIMIT80_INTERVAL}s)"
     if [ "$(id -u)" -ne 0 ] && [ ! -w "$CONSERVATION_MODE" ]; then
