@@ -10,8 +10,9 @@ Modern laptops may provide a "conservation" mode that limits charging to prolong
 
 ## Features
 - Single-file CLI (`batman`) with no runtime dependencies beyond bash
-- Commands: status, enable/on, disable/off, toggle, interactive, help
-- Environment-variable overrides for sysfs paths (for testing or alternate hardware)
+- Commands: status, enable/on, disable/off, toggle (80% limiter), interactive, help
+- `toggle`/`80` manages an 80% charge-band limiter (75-80%) via a background daemon that flips conservation mode at the band edges
+- Environment-variable overrides for sysfs paths (for testing or alternate hardware) and limiter tunables
 - CI builds release artifacts (.tar.gz and .deb) and publishes checksums
 
 ## Supported hardware
@@ -89,6 +90,8 @@ To run BATMAN against alternative or mocked sysfs paths, set one or more environ
 - CONSERVATION_MODE — path to the conservation_mode node
 - BATTERY_CAPACITY — path to battery capacity (default `/sys/class/power_supply/BAT0/capacity`)
 - BATTERY_STATUS — path to battery status (default `/sys/class/power_supply/BAT0/status`)
+- LIMIT80_HI / LIMIT80_LO / LIMIT80_INTERVAL — 80% limiter tunables (defaults 80, 75, 20s)
+- LIMIT80_PIDFILE / LIMIT80_LOG / LIMIT80_STATE — limiter state files (defaults in /tmp)
 
 Example:
 ```bash
