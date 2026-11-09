@@ -2,6 +2,10 @@
 
 BATMAN is a minimal, auditable command-line utility to read battery state and toggle Lenovo-style "conservation" charging mode via the kernel sysfs interface. The tool is intentionally small, portable, and scriptable so it can be reviewed and packaged easily.
 
+> Building this in the open — if it saves you time, a star helps others find it.
+> Found a bug, or have an idea? [Open an issue](https://github.com/ziuus/batman/issues).
+> Bug reports with your laptop model and sysfs paths help most.
+
 ## Motivation
 Modern laptops may provide a "conservation" mode that limits charging to prolong battery lifespan. BATMAN provides a tiny, transparent interface to:
 - Query battery capacity and charging status
